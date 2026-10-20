@@ -1,0 +1,127 @@
+# =============================================================================
+# CONFIGURACIÓN DEL EXPERIMENTO (tesis: PostgreSQL 18 vs MySQL 9.7.2 LTS)
+# =============================================================================
+# Este archivo + el código + la semilla maestra determinan TODO el plan: qué se ejecuta, en qué orden
+# y con qué parámetros. Su SHA-256 queda registrado en cada resultado. No lo modifique durante las
+# campañas: si lo hace, el orquestador se niega a reanudar (el plan ya no coincide).
+# Los valores marcados [CONFIRMAR] dependen del equipo real y de las secciones 3.1-3.3.
+
+[general]
+semilla_maestra = 20261019      # FIJAR UNA VEZ y no cambiar. Se publica junto con la tesis.
+directorio_resultados = "resultados"
+repeticiones = 30
+piloto_repeticiones = 3
+concurrencias = [1, 10, 50, 100]
+c6_concurrencia = 1             # C6 (texto): conexiones [CONFIRMAR]
+c7_concurrencia = 10            # C7 (W3 bajo E1/E2): [DEFINIR] en la tesis
+incluir_cache_fria = false      # C8 opcional
+cooldown_s = 30
+reposo_cpu_max_pct = 5.0
+reposo_espera_max_s = 120
+timeout_ejecucion_s = 1800
+timeout_conexion_s = 300
+max_reintentos = 3
+
+[sistema]
+# Núcleos reservados al cliente y al orquestador (los motores usan los demás). Ejemplo para 8 núcleos:
+# cpus_clientes = [4, 5, 6, 7]  y limite los motores con CPUAffinity=0-3 en su unidad systemd.
+cpus_clientes = []              # [CONFIRMAR]; vacío = sin afinidad (la holgura del cliente no se evalúa)
+dispositivo_datos = "nvme0n1"   # nombre en /proc/diskstats [CONFIRMAR]
+fuente_recursos = "auto"        # cgroup v2 del servicio si existe; si no, /proc por pidfile
+exigir_cext_mysql = true        # el driver MySQL DEBE usar la extensión en C
+holgura_cliente_max_pct = 80.0
+verificacion_imagen_por_corrida = "rapida"   # "completa" = SHA-256 de todo el directorio (lento)
+
+[ventanas]
+linea_base_n = 1000
+w2_repeticiones_por_consulta = 5
+W1 = { calentamiento_s = 60,  medicion_s = 120 }
+W4 = { calentamiento_s = 120, medicion_s = 300 }
+T9 = { calentamiento_s = 60,  medicion_s = 120 }
+SB1 = { calentamiento_s = 10, medicion_s = 30 }
+
+[w3]
+filas_e1 = 500000
+lote_e1 = 1000
+marcas_e2 = 100
+factor_precio_e2 = 1.05
+
+[w4]
+lectura = 0.70
+compra = 0.20
+actualizacion = 0.10
+
+[dataset]                       # debe coincidir con el script de población
+usuarios = 30000
+marcas = 800
+productos = 500000
+ventas = 5000000
+# L9 busca por defecto un número de producto (token muy selectivo). Para términos más frecuentes,
+# liste aquí palabras presentes en la descripción, p. ej. ["rendimiento", "pruebas"].
+terminos_fts = []
+
+[validez]
+errores_tecnicos_max_pct = 1.0
+cobertura_monitor_min = 0.95
+ventana_efectiva_min = 0.95
+cv_tps_max_pct = 10.0
+
+[sysbench]
+binario = "sysbench"
+base = "sbtest"
+filas = 1000000
+hilos = [1, 10, 50]
+tiempo_s = 60
+calentamiento_s = 10
+repeticiones = 5
+umbral_desviacion_pct = 20.0
+
+# ----------------------------------------------------------------------------- motores
+# El orquestador debe ejecutarse como root (systemctl, drop_caches). Las contraseñas NO van en este
+# archivo: se leen de la variable de entorno indicada en password_env.
+
+[motores.postgres]
+tipo = "postgresql"
+servicio = "postgresql@18-main"          # [CONFIRMAR] nombre de la unidad systemd
+host = "127.0.0.1"
+puerto = 5432
+usuario = "bench"
+password_env = "BENCH_PG_PASSWORD"
+base = "tesis"
+datadir = "/var/lib/postgresql/18/main"
+imagenes = "/srv/bench/imagenes/postgres"
+parametros_registrar = ["shared_buffers", "effective_cache_size", "work_mem", "maintenance_work_mem",
+  "max_connections", "wal_buffers", "max_wal_size", "checkpoint_timeout", "synchronous_commit", "fsync",
+  "random_page_cost", "effective_io_concurrency", "default_statistics_target", "jit"]
+[motores.postgres.comandos]
+detener = ["systemctl", "stop", "{servicio}"]
+iniciar = ["systemctl", "start", "{servicio}"]
+activo = ["systemctl", "is-active", "--quiet", "{servicio}"]
+# --modify-window=-1 es OBLIGATORIO: sin él rsync omite archivos del mismo tamaño y de la misma fecha en
+# segundos, aunque el contenido difiera (las páginas se modifican en su sitio), y la restauración queda a medias.
+# rsync restaura de forma portable. Si el sistema de archivos admite reflink (XFS/btrfs) puede acelerarse con
+# cp --reflink=auto, pero conviene validarlo con el piloto: debe dar la misma huella que rsync.
+restaurar = ["rsync", "-a", "--delete", "--modify-window=-1", "{imagen}/", "{datadir}/"]
+copiar = ["rsync", "-a", "--delete", "--modify-window=-1", "{datadir}/", "{imagen}/"]
+vaciar_cache = ["sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"]
+
+[motores.mysql]
+tipo = "mysql"
+servicio = "mysql"
+host = "127.0.0.1"
+puerto = 3306
+usuario = "bench"
+password_env = "BENCH_MYSQL_PASSWORD"
+base = "tesis"
+datadir = "/var/lib/mysql"
+imagenes = "/srv/bench/imagenes/mysql"
+parametros_registrar = ["innodb_buffer_pool_size", "innodb_log_file_size", "innodb_redo_log_capacity",
+  "innodb_flush_log_at_trx_commit", "innodb_flush_method", "innodb_io_capacity", "max_connections",
+  "table_open_cache", "innodb_ft_min_token_size", "transaction_isolation"]
+[motores.mysql.comandos]
+detener = ["systemctl", "stop", "{servicio}"]
+iniciar = ["systemctl", "start", "{servicio}"]
+activo = ["systemctl", "is-active", "--quiet", "{servicio}"]
+restaurar = ["rsync", "-a", "--delete", "--modify-window=-1", "{imagen}/", "{datadir}/"]
+copiar = ["rsync", "-a", "--delete", "--modify-window=-1", "{datadir}/", "{imagen}/"]
+vaciar_cache = ["sh", "-c", "echo 3 > /proc/sys/vm/drop_caches"]

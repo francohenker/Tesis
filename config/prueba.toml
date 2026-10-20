@@ -1,0 +1,88 @@
+# Configuración de PRUEBA (dataset reducido, ventanas cortas) para verificar la cadena de herramientas.
+# No usar para los resultados de la tesis: ver config/experimento.toml.
+
+[general]
+semilla_maestra = 20260101
+directorio_resultados = "resultados_prueba"
+repeticiones = 2
+piloto_repeticiones = 1
+concurrencias = [1, 4]
+cooldown_s = 1
+reposo_cpu_max_pct = 60.0
+reposo_espera_max_s = 15
+timeout_ejecucion_s = 300
+timeout_conexion_s = 60
+espera_disponible_s = 60
+max_reintentos = 1
+c7_concurrencia = 4
+
+[sistema]
+dispositivo_datos = "vda"
+fuente_recursos = "proc"
+exigir_cext_mysql = true
+holgura_cliente_max_pct = 95.0
+
+[ventanas]
+linea_base_n = 200
+w2_repeticiones_por_consulta = 2
+W1 = { calentamiento_s = 2, medicion_s = 5 }
+W4 = { calentamiento_s = 2, medicion_s = 5 }
+T9 = { calentamiento_s = 2, medicion_s = 5 }
+SB1 = { calentamiento_s = 2, medicion_s = 5 }
+
+[w3]
+filas_e1 = 6000
+lote_e1 = 500
+marcas_e2 = 5
+
+[dataset]
+usuarios = 300
+marcas = 20
+productos = 2000
+ventas = 3000
+
+[validez]
+cobertura_monitor_min = 0.5
+
+[sysbench]
+base = "sbtest"
+filas = 10000
+hilos = [1, 4]
+tiempo_s = 5
+calentamiento_s = 2
+repeticiones = 2
+umbral_desviacion_pct = 20.0
+
+[motores.postgres]
+tipo = "postgresql"
+host = "127.0.0.1"
+puerto = 55432
+usuario = "bench"
+base = "tesis"
+datadir = "/srv/lab/pg/data"
+imagenes = "/srv/lab/img/pg"
+pidfile = "/srv/lab/pg/data/postmaster.pid"
+parametros_registrar = ["shared_buffers", "max_connections", "fsync", "synchronous_commit", "work_mem"]
+[motores.postgres.comandos]
+detener = ["/srv/lab/bin/pg-stop.sh"]
+iniciar = ["/srv/lab/bin/pg-start.sh"]
+activo = ["/srv/lab/bin/pg-active.sh"]
+restaurar = ["rsync", "-a", "--delete", "--modify-window=-1", "{imagen}/", "{datadir}/"]
+copiar = ["rsync", "-a", "--delete", "--modify-window=-1", "{datadir}/", "{imagen}/"]
+
+[motores.mysql]
+tipo = "mysql"
+host = "127.0.0.1"
+puerto = 53306
+usuario = "bench"
+base = "tesis"
+datadir = "/srv/lab/my/data"
+imagenes = "/srv/lab/img/my"
+pidfile = "/srv/lab/my/mysqld.pid"
+parametros_registrar = ["innodb_buffer_pool_size", "max_connections", "innodb_flush_log_at_trx_commit", "innodb_flush_method"]
+[motores.mysql.comandos]
+detener = ["/srv/lab/bin/my-stop.sh"]
+iniciar = ["/srv/lab/bin/my-start.sh"]
+activo = ["/srv/lab/bin/my-active.sh"]
+restaurar = ["rsync", "-a", "--delete", "--modify-window=-1", "{imagen}/", "{datadir}/"]
+copiar = ["rsync", "-a", "--delete", "--modify-window=-1", "{datadir}/", "{imagen}/"]

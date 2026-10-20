@@ -1,0 +1,4 @@
+# Dependencias de ejecución (versiones fijadas: forman parte de la reproducibilidad).
+# Python >= 3.11 (usa tomllib de la biblioteca estándar). Probado con Python 3.13.
+psycopg2-binary==2.9.13
+mysql-connector-python==9.7.0
