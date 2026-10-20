@@ -59,7 +59,7 @@
 --   categorias.id_categoria_padre   (uq_categoria_padre_nombre)
 --   producto_categoria.id_producto  (PK compuesta)
 --   detalle_venta.id_venta          (uq_venta_producto)
---   reseñas_productos.id_usuario    (uq_usuario_producto_reseña)
+--   resenas_productos.id_usuario    (uq_usuario_producto_resena)
 
 CREATE INDEX IF NOT EXISTS fk_productos_marca
     ON productos (id_marca);
@@ -88,11 +88,11 @@ CREATE INDEX IF NOT EXISTS fk_movimientos_producto
 CREATE INDEX IF NOT EXISTS fk_movimientos_usuario
     ON movimientos_inventario (id_usuario_responsable);
 
-CREATE INDEX IF NOT EXISTS fk_reseñas_producto
-    ON reseñas_productos (id_producto);
+CREATE INDEX IF NOT EXISTS fk_resenas_producto
+    ON resenas_productos (id_producto);
 
-CREATE INDEX IF NOT EXISTS fk_reseñas_venta
-    ON reseñas_productos (id_venta);
+CREATE INDEX IF NOT EXISTS fk_resenas_venta
+    ON resenas_productos (id_venta);
 
 CREATE INDEX IF NOT EXISTS fk_devoluciones_detalle
     ON devoluciones (id_detalle_venta);
@@ -118,7 +118,7 @@ DROP INDEX IF EXISTS idx_venta_canal;
 DROP INDEX IF EXISTS idx_pagos_estado;
 DROP INDEX IF EXISTS idx_movimientos_fecha;
 DROP INDEX IF EXISTS idx_movimientos_tipo;
-DROP INDEX IF EXISTS idx_reseñas_calificacion;
+DROP INDEX IF EXISTS idx_resenas_calificacion;
 DROP INDEX IF EXISTS idx_devoluciones_estado;
 
 -- E2
@@ -128,15 +128,15 @@ DROP INDEX IF EXISTS idx_venta_canal_fecha;
 DROP INDEX IF EXISTS idx_detalle_producto_venta;
 DROP INDEX IF EXISTS idx_productos_marca_estado;
 DROP INDEX IF EXISTS idx_movimientos_producto_tipo_fecha;
-DROP INDEX IF EXISTS idx_reseñas_producto_calificacion;
+DROP INDEX IF EXISTS idx_resenas_producto_calificacion;
 
 -- E3 (GIN y GiST)
 DROP INDEX IF EXISTS idx_productos_nombre_fts;
 DROP INDEX IF EXISTS idx_productos_descripcion_fts;
-DROP INDEX IF EXISTS idx_reseñas_comentario_fts;
+DROP INDEX IF EXISTS idx_resenas_comentario_fts;
 DROP INDEX IF EXISTS idx_productos_nombre_gist;
 DROP INDEX IF EXISTS idx_productos_descripcion_gist;
-DROP INDEX IF EXISTS idx_reseñas_comentario_gist;
+DROP INDEX IF EXISTS idx_resenas_comentario_gist;
 
 
 -- =====================================================
@@ -173,8 +173,8 @@ CREATE INDEX idx_movimientos_tipo
     ON movimientos_inventario (tipo_movimiento);
 
 -- 5 valores
-CREATE INDEX idx_reseñas_calificacion
-    ON reseñas_productos (calificacion);
+CREATE INDEX idx_resenas_calificacion
+    ON resenas_productos (calificacion);
 
 -- 6 valores
 CREATE INDEX idx_devoluciones_estado
@@ -232,9 +232,9 @@ CREATE INDEX idx_productos_marca_estado
 CREATE INDEX idx_movimientos_producto_tipo_fecha
     ON movimientos_inventario (id_producto, tipo_movimiento, fecha_movimiento);
 
--- Alta + baja: reseñas de un producto por calificación
-CREATE INDEX idx_reseñas_producto_calificacion
-    ON reseñas_productos (id_producto, calificacion);
+-- Alta + baja: resenas de un producto por calificación
+CREATE INDEX idx_resenas_producto_calificacion
+    ON resenas_productos (id_producto, calificacion);
 
 
 -- =====================================================
@@ -250,8 +250,8 @@ CREATE INDEX idx_productos_nombre_fts
 CREATE INDEX idx_productos_descripcion_fts
     ON productos USING GIN (to_tsvector('spanish', coalesce(descripcion, '')));
 
-CREATE INDEX idx_reseñas_comentario_fts
-    ON reseñas_productos USING GIN (to_tsvector('spanish', coalesce(comentario, '')));
+CREATE INDEX idx_resenas_comentario_fts
+    ON resenas_productos USING GIN (to_tsvector('spanish', coalesce(comentario, '')));
 
 
 -- =====================================================
@@ -270,8 +270,8 @@ CREATE INDEX idx_productos_nombre_gist
 CREATE INDEX idx_productos_descripcion_gist
     ON productos USING GIST (to_tsvector('spanish', coalesce(descripcion, '')));
 
-CREATE INDEX idx_reseñas_comentario_gist
-    ON reseñas_productos USING GIST (to_tsvector('spanish', coalesce(comentario, '')));
+CREATE INDEX idx_resenas_comentario_gist
+    ON resenas_productos USING GIST (to_tsvector('spanish', coalesce(comentario, '')));
 
 
 -- =====================================================

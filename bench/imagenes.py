@@ -3,7 +3,8 @@
 Precondición: el directorio de datos del motor contiene el dataset ya cargado
 (scripts de creación y población) y NO tiene todavía los índices del script OE5.
 
-    E0  = datos cargados + sección 0 (índices de claves foráneas) + estadísticas
+    E0  = datos cargados + sección 0 (índices de claves foráneas; en MySQL, además,
+          las claves foráneas, que se agregan después de esos índices) + estadísticas
     E1  = E0 + sección 2        E2 = E0 + sección 3
     E3  = E0 + sección 4A/4B (PostgreSQL: GIN, GiST) o 4 (MySQL: FULLTEXT)
 

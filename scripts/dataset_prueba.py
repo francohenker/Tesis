@@ -20,65 +20,7 @@ from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from bench.config import Config  # noqa: E402
 from bench.db import Conexion  # noqa: E402
-
-MYSQL_SCHEMA = """
-CREATE TABLE usuarios (id_usuario BIGINT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, apellido VARCHAR(100) NOT NULL,
-  email VARCHAR(150) NOT NULL, telefono VARCHAR(20), fecha_registro DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  fecha_ultima_actividad DATETIME, estado VARCHAR(20) NOT NULL DEFAULT 'activo' CHECK (estado IN ('activo','inactivo','suspendido')),
-  CONSTRAINT uq_usuarios_email UNIQUE (email));
-CREATE TABLE marcas (id_marca INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, pais_origen VARCHAR(50), descripcion TEXT,
-  fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP, CONSTRAINT uq_marcas_nombre UNIQUE (nombre));
-CREATE TABLE categorias (id_categoria INT AUTO_INCREMENT PRIMARY KEY, nombre VARCHAR(100) NOT NULL, id_categoria_padre INT,
-  descripcion TEXT, nivel SMALLINT DEFAULT 1, CONSTRAINT uq_categoria_padre_nombre UNIQUE (id_categoria_padre, nombre),
-  FOREIGN KEY (id_categoria_padre) REFERENCES categorias(id_categoria) ON DELETE SET NULL);
-CREATE TABLE productos (id_producto BIGINT AUTO_INCREMENT PRIMARY KEY, sku VARCHAR(50) NOT NULL, nombre VARCHAR(200) NOT NULL,
-  descripcion TEXT, id_marca INT, precio_base DECIMAL(12,2) NOT NULL CHECK (precio_base >= 0),
-  stock_actual INT NOT NULL DEFAULT 0 CHECK (stock_actual >= 0), peso_kg DECIMAL(6,2), fecha_alta DATETIME DEFAULT CURRENT_TIMESTAMP,
-  fecha_baja DATETIME, estado VARCHAR(20) DEFAULT 'disponible' CHECK (estado IN ('disponible','agotado','descontinuado')),
-  CONSTRAINT uq_productos_sku UNIQUE (sku), FOREIGN KEY (id_marca) REFERENCES marcas(id_marca) ON DELETE SET NULL);
-CREATE TABLE producto_categoria (id_producto BIGINT NOT NULL, id_categoria INT NOT NULL, es_principal BOOLEAN DEFAULT FALSE,
-  PRIMARY KEY (id_producto, id_categoria), FOREIGN KEY (id_producto) REFERENCES productos(id_producto) ON DELETE CASCADE,
-  FOREIGN KEY (id_categoria) REFERENCES categorias(id_categoria) ON DELETE CASCADE);
-CREATE TABLE direcciones_envio (id_direccion BIGINT AUTO_INCREMENT PRIMARY KEY, id_usuario BIGINT NOT NULL, alias VARCHAR(50),
-  calle VARCHAR(200) NOT NULL, numero_exterior VARCHAR(20), numero_interior VARCHAR(20), colonia VARCHAR(100), ciudad VARCHAR(100) NOT NULL,
-  estado_provincia VARCHAR(100) NOT NULL, codigo_postal VARCHAR(10) NOT NULL, pais VARCHAR(50) DEFAULT 'Argentina',
-  es_principal BOOLEAN DEFAULT FALSE, fecha_creacion DATETIME DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE);
-CREATE TABLE venta (id_venta BIGINT AUTO_INCREMENT PRIMARY KEY, id_usuario BIGINT NOT NULL, id_direccion BIGINT,
-  fecha_venta DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, subtotal DECIMAL(12,2) NOT NULL CHECK (subtotal >= 0),
-  impuestos DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (impuestos >= 0), descuento DECIMAL(12,2) NOT NULL DEFAULT 0 CHECK (descuento >= 0),
-  total DECIMAL(12,2) NOT NULL CHECK (total >= 0),
-  estado VARCHAR(30) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','pagada','enviada','entregada','cancelada','devuelta')),
-  canal_venta VARCHAR(30) DEFAULT 'web' CHECK (canal_venta IN ('web','app','tienda_fisica','telefono')), notas TEXT,
-  FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario), FOREIGN KEY (id_direccion) REFERENCES direcciones_envio(id_direccion));
-CREATE TABLE detalle_venta (id_detalle BIGINT AUTO_INCREMENT PRIMARY KEY, id_venta BIGINT NOT NULL, id_producto BIGINT NOT NULL,
-  cantidad INT NOT NULL CHECK (cantidad > 0), precio_unitario DECIMAL(12,2) NOT NULL CHECK (precio_unitario >= 0),
-  descuento_item DECIMAL(12,2) DEFAULT 0, subtotal_item DECIMAL(12,2) NOT NULL, CONSTRAINT uq_venta_producto UNIQUE (id_venta, id_producto),
-  FOREIGN KEY (id_venta) REFERENCES venta(id_venta) ON DELETE CASCADE, FOREIGN KEY (id_producto) REFERENCES productos(id_producto));
-CREATE TABLE pagos (id_pago BIGINT AUTO_INCREMENT PRIMARY KEY, id_venta BIGINT NOT NULL,
-  metodo_pago VARCHAR(30) NOT NULL CHECK (metodo_pago IN ('tarjeta_credito','tarjeta_debito','paypal','transferencia','efectivo','cripto')),
-  monto DECIMAL(12,2) NOT NULL CHECK (monto > 0),
-  estado VARCHAR(20) NOT NULL DEFAULT 'pendiente' CHECK (estado IN ('pendiente','aprobado','rechazado','reembolsado','cancelado')),
-  referencia_bancaria VARCHAR(100), fecha_pago DATETIME DEFAULT CURRENT_TIMESTAMP, fecha_aprobacion DATETIME,
-  FOREIGN KEY (id_venta) REFERENCES venta(id_venta));
-CREATE TABLE movimientos_inventario (id_movimiento BIGINT AUTO_INCREMENT PRIMARY KEY, id_producto BIGINT NOT NULL,
-  tipo_movimiento VARCHAR(20) NOT NULL CHECK (tipo_movimiento IN ('entrada','salida','devolucion','ajuste','merma')),
-  cantidad INT NOT NULL, cantidad_anterior INT, cantidad_nueva INT, id_almacen VARCHAR(30) DEFAULT 'CENTRAL',
-  id_usuario_responsable BIGINT, motivo TEXT, fecha_movimiento DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  FOREIGN KEY (id_producto) REFERENCES productos(id_producto), FOREIGN KEY (id_usuario_responsable) REFERENCES usuarios(id_usuario));
-CREATE TABLE `reseñas_productos` (`id_reseña` BIGINT AUTO_INCREMENT PRIMARY KEY, id_usuario BIGINT NOT NULL, id_producto BIGINT NOT NULL,
-  id_venta BIGINT, calificacion SMALLINT NOT NULL CHECK (calificacion BETWEEN 1 AND 5), titulo VARCHAR(150), comentario TEXT,
-  imagen_url VARCHAR(500), `fecha_reseña` DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP, fecha_edicion DATETIME, votos_utiles INT DEFAULT 0,
-  CONSTRAINT `uq_usuario_producto_reseña` UNIQUE (id_usuario, id_producto),
-  FOREIGN KEY (id_usuario) REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
-  FOREIGN KEY (id_producto) REFERENCES productos(id_producto) ON DELETE CASCADE,
-  FOREIGN KEY (id_venta) REFERENCES venta(id_venta) ON DELETE SET NULL);
-CREATE TABLE devoluciones (id_devolucion BIGINT AUTO_INCREMENT PRIMARY KEY, id_detalle_venta BIGINT NOT NULL, id_venta BIGINT NOT NULL,
-  motivo VARCHAR(50) NOT NULL CHECK (motivo IN ('producto_defectuoso','no_conforme','equivocado','talla_incorrecta','otro')),
-  descripcion TEXT, estado VARCHAR(30) DEFAULT 'solicitada', monto_reembolso DECIMAL(12,2) NOT NULL CHECK (monto_reembolso >= 0),
-  fecha_solicitud DATETIME DEFAULT CURRENT_TIMESTAMP, fecha_resolucion DATETIME,
-  FOREIGN KEY (id_detalle_venta) REFERENCES detalle_venta(id_detalle), FOREIGN KEY (id_venta) REFERENCES venta(id_venta));
-"""
+from bench.imagenes import sentencias  # noqa: E402
 
 
 def lotes(con: Conexion, tabla: str, cols: list[str], filas: list[tuple], tam: int = 500) -> None:
@@ -100,15 +42,11 @@ def main() -> None:
     d = cfg.get("dataset")
     con = Conexion(m, exigir_cext=False)
     rng = random.Random(20260101)
+    raiz_sql = Path(__file__).resolve().parent.parent / "sql"
     if con.tipo == "postgresql":
-        con.ejecutar((Path(__file__).resolve().parent.parent / "sql" / "postgres_create_db.sql").read_text(encoding="utf-8"))
+        con.ejecutar((raiz_sql / "postgres_create_db.sql").read_text(encoding="utf-8"))
     else:
-        con.ejecutar("SET FOREIGN_KEY_CHECKS = 0")
-        for t in ("devoluciones", "pagos", "movimientos_inventario", "`reseñas_productos`", "direcciones_envio",
-                  "producto_categoria", "detalle_venta", "venta", "productos", "categorias", "marcas", "usuarios"):
-            con.ejecutar(f"DROP TABLE IF EXISTS {t}")
-        con.ejecutar("SET FOREIGN_KEY_CHECKS = 1")
-        for s in [x.strip() for x in MYSQL_SCHEMA.split(";\n") if x.strip()]:
+        for s in sentencias((raiz_sql / "mysql_create_db.sql").read_text(encoding="utf-8")):
             con.ejecutar(s)
     U, M, P, V = d["usuarios"], d["marcas"], d["productos"], d["ventas"]
     bv, bm = dt.datetime.fromisoformat(d["fecha_base_venta"]), dt.datetime.fromisoformat(d["fecha_base_mov"])
@@ -149,7 +87,7 @@ def main() -> None:
     pares = set()
     while len(pares) < min(P, U * 5, int(P * 0.75)):
         pares.add((rng.randint(1, U), rng.randint(1, P)))
-    lotes(con, "`reseñas_productos`" if con.tipo == "mysql" else "reseñas_productos", ["id_usuario", "id_producto", "calificacion", "comentario"],
+    lotes(con, "resenas_productos", ["id_usuario", "id_producto", "calificacion", "comentario"],
           [(u, p, rng.randint(1, 5), f"Comentario sobre el producto {p} muy bueno") for u, p in sorted(pares)])
     lotes(con, "devoluciones", ["id_detalle_venta", "id_venta", "motivo", "monto_reembolso"],
           [(k, det[k - 1][0], rng.choice(["producto_defectuoso", "no_conforme", "otro"]), Decimal("50.00")) for k in range(1, min(len(det), 200) + 1)])

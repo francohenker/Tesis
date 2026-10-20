@@ -40,7 +40,7 @@ cp config/experimento.toml config/mi_experimento.toml     # ajustar [CONFIRMAR];
 export BENCH_PG_PASSWORD=...  BENCH_MYSQL_PASSWORD=...
 sh scripts/preparar_sistema.sh | tee resultados/sistema.txt            # governor, THP, swap, tareas ajenas
 
-# 1) cargar el dataset en cada motor (scripts de creación y población) y comprobar el dominio
+# 1) cargar el dataset en cada motor (ver «Carga del dataset» más abajo) y comprobar la verificación final
 # 2) imágenes base (una vez; también mide la creación de cada índice)
 python -m bench --config config/mi_experimento.toml imagenes --motor postgres
 python -m bench --config config/mi_experimento.toml imagenes --motor mysql
@@ -56,6 +56,27 @@ python -m bench --config config/mi_experimento.toml consolidar
 python -m bench --config config/mi_experimento.toml sysbench-preparar
 python -m bench --config config/mi_experimento.toml sysbench
 ```
+
+### Carga del dataset (sección 3.2)
+
+```sh
+# PostgreSQL (como superusuario)
+psql -c "CREATE DATABASE tesis TEMPLATE template0 ENCODING 'UTF8' LOCALE_PROVIDER builtin LOCALE 'C.UTF-8'"
+psql -d tesis -f sql/postgres_create_db.sql
+psql -d tesis -f sql/postgres_populate_db.sql
+# MySQL (como root, con el cliente mysql)
+mysql -e "CREATE DATABASE tesis CHARACTER SET utf8mb4 COLLATE utf8mb4_0900_bin"
+mysql tesis < sql/mysql_create_db.sql
+mysql tesis < sql/mysql_populate_db.sql
+```
+
+Los scripts de población no usan valores aleatorios: cada columna es una función determinista del número de fila
+(con la función de dispersión `hk`, idéntica en ambos motores) y las claves se asignan de forma explícita, de modo que
+los dos motores quedan con exactamente las mismas filas. Al final, cada script muestra tres verificaciones que deben
+dar `OK`: volúmenes de la Tabla 3.2, integridad de las 17 claves foráneas y una huella del contenido por tabla
+(la misma fórmula en ambos motores; el valor esperado se obtuvo con PostgreSQL). En MySQL las tablas se crean sin
+claves foráneas; la sección 0 de `mysql_indexes_oe5.sql` (que aplica `imagenes`) crea los índices `fk_*` y después
+agrega las claves, para que InnoDB no genere índices automáticos y E0 sea igual en ambos motores.
 
 Otras opciones: `run --campanas principal indices_lectura …` (o `C1-C4`, `C5`, `C6`, `C7`, `C8`), `run --motor`,
 `run --limite N`, `run --simular` (lista lo pendiente), `run --reintentar-agotadas`, y

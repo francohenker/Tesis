@@ -138,7 +138,7 @@ _SQL: dict[str, tuple[str, Callable | None, bool]] = {
     "L7": ("SELECT id_movimiento, cantidad, fecha_movimiento FROM movimientos_inventario "
            "WHERE id_producto = %s AND tipo_movimiento = %s "
            "AND fecha_movimiento BETWEEN %s AND %s ORDER BY fecha_movimiento", g_mov, True),
-    "L8": ("SELECT calificacion, COUNT(*) AS cantidad FROM reseñas_productos "
+    "L8": ("SELECT calificacion, COUNT(*) AS cantidad FROM resenas_productos "
            "WHERE id_producto = %s GROUP BY calificacion ORDER BY calificacion", g_id_producto, True),
     "A1": ("SELECT EXTRACT(YEAR FROM fecha_venta) AS anio, EXTRACT(MONTH FROM fecha_venta) AS mes, "
            "canal_venta, COUNT(*) AS ventas, SUM(total) AS monto FROM venta "

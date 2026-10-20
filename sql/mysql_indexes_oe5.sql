@@ -24,10 +24,22 @@
 --   InnoDB exige un índice sobre cada columna de clave foránea y lo crea
 --   automáticamente al definir la restricción. Esos índices no se pueden
 --   quitar sin eliminar la FK, de modo que un E0 "sin índices" no existe
---   en MySQL. La sección 0 los vuelve explícitos y con nombre (prefijo
---   fk_), igual que en PostgreSQL, para que ambos motores partan del
---   mismo estado y para que el reset de la sección 1 no choque con el
---   error 1553 ("índice necesario para una clave foránea").
+--   en MySQL. La sección 0 crea esos índices de forma explícita y con
+--   nombre (prefijo fk_), igual que en PostgreSQL, para que ambos motores
+--   partan del mismo estado y para que el reset de la sección 1 no choque
+--   con el error 1553 ("índice necesario para una clave foránea").
+--
+-- POR QUÉ LAS CLAVES FORÁNEAS SE AGREGAN AQUÍ
+--   mysql_create_db.sql crea las tablas sin claves foráneas. Si las
+--   declarara, InnoDB generaría un índice automático por cada una, con el
+--   mismo nombre que la restricción: los CREATE INDEX fk_* fallarían por
+--   nombre duplicado (error 1061) y, en E2, InnoDB descartaría en silencio
+--   los índices automáticos cuya columna encabeza un índice compuesto. Por
+--   eso la sección 0 crea primero los 13 índices fk_* (medidos igual que en
+--   PostgreSQL) y después agrega las 17 claves foráneas, que los usan como
+--   índice de soporte. Las claves se agregan con foreign_key_checks = 0
+--   (ALGORITHM=INPLACE, sin reescribir las tablas); la integridad de los
+--   datos ya fue verificada al final de mysql_populate_db.sql.
 --
 -- PROTOCOLO DE USO (repetir para cada estrategia)
 --   1. Sección 0: una sola vez, después de cargar los datos.
@@ -52,19 +64,15 @@
 
 
 -- =====================================================
--- 0. BASE ESTRUCTURAL (E0): ÍNDICES DE SOPORTE DE CLAVES FORÁNEAS
+-- 0. BASE ESTRUCTURAL (E0): ÍNDICES DE SOPORTE Y CLAVES FORÁNEAS
 -- =====================================================
--- Ejecutar una sola vez tras la carga. No se eliminan en la sección 1.
--- Al crear un índice explícito equivalente, InnoDB puede descartar el
--- índice implícito que había generado para la FK. Verificar con la
--- sección 7 que quede un único índice por columna de FK; si persiste un
--- duplicado implícito (su nombre coincide con la columna o la restricción),
--- eliminarlo con ALTER TABLE ... DROP INDEX <nombre>.
+-- Ejecutar una sola vez tras la carga (mysql_populate_db.sql), sobre tablas
+-- que todavía no tienen claves foráneas. No se eliminan en la sección 1.
 -- Se omiten las FK que ya son la primera columna de una PK/UNIQUE:
 --   categorias.id_categoria_padre   (uq_categoria_padre_nombre)
 --   producto_categoria.id_producto  (PK compuesta)
 --   detalle_venta.id_venta          (uq_venta_producto)
---   reseñas_productos.id_usuario    (uq_usuario_producto_reseña)
+--   resenas_productos.id_usuario    (uq_usuario_producto_resena)
 
 CREATE INDEX fk_productos_marca
     ON productos (id_marca);
@@ -93,17 +101,89 @@ CREATE INDEX fk_movimientos_producto
 CREATE INDEX fk_movimientos_usuario
     ON movimientos_inventario (id_usuario_responsable);
 
-CREATE INDEX fk_reseñas_producto
-    ON reseñas_productos (id_producto);
+CREATE INDEX fk_resenas_producto
+    ON resenas_productos (id_producto);
 
-CREATE INDEX fk_reseñas_venta
-    ON reseñas_productos (id_venta);
+CREATE INDEX fk_resenas_venta
+    ON resenas_productos (id_venta);
 
 CREATE INDEX fk_devoluciones_detalle
     ON devoluciones (id_detalle_venta);
 
 CREATE INDEX fk_devoluciones_venta
     ON devoluciones (id_venta);
+
+-- Claves foráneas (17), con las mismas acciones referenciales que en
+-- PostgreSQL. Cada una usa como soporte el índice fk_* recién creado o la
+-- PK/UNIQUE cuya primera columna es la de la FK, de modo que InnoDB no crea
+-- índices adicionales.
+SET SESSION foreign_key_checks = 0;
+
+ALTER TABLE categorias
+    ADD CONSTRAINT fk_categorias_padre FOREIGN KEY (id_categoria_padre)
+        REFERENCES categorias (id_categoria) ON DELETE SET NULL,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE productos
+    ADD CONSTRAINT fk_productos_marca FOREIGN KEY (id_marca)
+        REFERENCES marcas (id_marca) ON DELETE SET NULL,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE producto_categoria
+    ADD CONSTRAINT fk_producto_categoria_producto FOREIGN KEY (id_producto)
+        REFERENCES productos (id_producto) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_producto_categoria_categoria FOREIGN KEY (id_categoria)
+        REFERENCES categorias (id_categoria) ON DELETE CASCADE,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE direcciones_envio
+    ADD CONSTRAINT fk_direcciones_usuario FOREIGN KEY (id_usuario)
+        REFERENCES usuarios (id_usuario) ON DELETE CASCADE,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE venta
+    ADD CONSTRAINT fk_venta_usuario FOREIGN KEY (id_usuario)
+        REFERENCES usuarios (id_usuario),
+    ADD CONSTRAINT fk_venta_direccion FOREIGN KEY (id_direccion)
+        REFERENCES direcciones_envio (id_direccion),
+    ALGORITHM = INPLACE;
+
+ALTER TABLE detalle_venta
+    ADD CONSTRAINT fk_detalle_venta FOREIGN KEY (id_venta)
+        REFERENCES venta (id_venta) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_detalle_producto FOREIGN KEY (id_producto)
+        REFERENCES productos (id_producto),
+    ALGORITHM = INPLACE;
+
+ALTER TABLE pagos
+    ADD CONSTRAINT fk_pagos_venta FOREIGN KEY (id_venta)
+        REFERENCES venta (id_venta),
+    ALGORITHM = INPLACE;
+
+ALTER TABLE movimientos_inventario
+    ADD CONSTRAINT fk_movimientos_producto FOREIGN KEY (id_producto)
+        REFERENCES productos (id_producto),
+    ADD CONSTRAINT fk_movimientos_usuario FOREIGN KEY (id_usuario_responsable)
+        REFERENCES usuarios (id_usuario),
+    ALGORITHM = INPLACE;
+
+ALTER TABLE resenas_productos
+    ADD CONSTRAINT fk_resenas_usuario FOREIGN KEY (id_usuario)
+        REFERENCES usuarios (id_usuario) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_resenas_producto FOREIGN KEY (id_producto)
+        REFERENCES productos (id_producto) ON DELETE CASCADE,
+    ADD CONSTRAINT fk_resenas_venta FOREIGN KEY (id_venta)
+        REFERENCES venta (id_venta) ON DELETE SET NULL,
+    ALGORITHM = INPLACE;
+
+ALTER TABLE devoluciones
+    ADD CONSTRAINT fk_devoluciones_detalle FOREIGN KEY (id_detalle_venta)
+        REFERENCES detalle_venta (id_detalle),
+    ADD CONSTRAINT fk_devoluciones_venta FOREIGN KEY (id_venta)
+        REFERENCES venta (id_venta),
+    ALGORITHM = INPLACE;
+
+SET SESSION foreign_key_checks = 1;
 
 
 -- =====================================================
@@ -147,7 +227,7 @@ CALL oe5_quitar_indice('venta', 'idx_venta_canal');
 CALL oe5_quitar_indice('pagos', 'idx_pagos_estado');
 CALL oe5_quitar_indice('movimientos_inventario', 'idx_movimientos_fecha');
 CALL oe5_quitar_indice('movimientos_inventario', 'idx_movimientos_tipo');
-CALL oe5_quitar_indice('reseñas_productos', 'idx_reseñas_calificacion');
+CALL oe5_quitar_indice('resenas_productos', 'idx_resenas_calificacion');
 CALL oe5_quitar_indice('devoluciones', 'idx_devoluciones_estado');
 
 -- E2
@@ -157,12 +237,12 @@ CALL oe5_quitar_indice('venta', 'idx_venta_canal_fecha');
 CALL oe5_quitar_indice('detalle_venta', 'idx_detalle_producto_venta');
 CALL oe5_quitar_indice('productos', 'idx_productos_marca_estado');
 CALL oe5_quitar_indice('movimientos_inventario', 'idx_movimientos_producto_tipo_fecha');
-CALL oe5_quitar_indice('reseñas_productos', 'idx_reseñas_producto_calificacion');
+CALL oe5_quitar_indice('resenas_productos', 'idx_resenas_producto_calificacion');
 
 -- E3
 CALL oe5_quitar_indice('productos', 'idx_productos_nombre_fts');
 CALL oe5_quitar_indice('productos', 'idx_productos_descripcion_fts');
-CALL oe5_quitar_indice('reseñas_productos', 'idx_reseñas_comentario_fts');
+CALL oe5_quitar_indice('resenas_productos', 'idx_resenas_comentario_fts');
 
 
 -- =====================================================
@@ -199,8 +279,8 @@ CREATE INDEX idx_movimientos_tipo
     ON movimientos_inventario (tipo_movimiento);
 
 -- 5 valores
-CREATE INDEX idx_reseñas_calificacion
-    ON reseñas_productos (calificacion);
+CREATE INDEX idx_resenas_calificacion
+    ON resenas_productos (calificacion);
 
 -- 6 valores
 CREATE INDEX idx_devoluciones_estado
@@ -258,9 +338,9 @@ CREATE INDEX idx_productos_marca_estado
 CREATE INDEX idx_movimientos_producto_tipo_fecha
     ON movimientos_inventario (id_producto, tipo_movimiento, fecha_movimiento);
 
--- Alta + baja: reseñas de un producto por calificación
-CREATE INDEX idx_reseñas_producto_calificacion
-    ON reseñas_productos (id_producto, calificacion);
+-- Alta + baja: resenas de un producto por calificación
+CREATE INDEX idx_resenas_producto_calificacion
+    ON resenas_productos (id_producto, calificacion);
 
 
 -- =====================================================
@@ -281,8 +361,8 @@ CREATE FULLTEXT INDEX idx_productos_nombre_fts
 CREATE FULLTEXT INDEX idx_productos_descripcion_fts
     ON productos (descripcion);
 
-CREATE FULLTEXT INDEX idx_reseñas_comentario_fts
-    ON reseñas_productos (comentario);
+CREATE FULLTEXT INDEX idx_resenas_comentario_fts
+    ON resenas_productos (comentario);
 
 
 -- =====================================================
@@ -326,7 +406,7 @@ ALTER TABLE movimientos_inventario
 
 ANALYZE TABLE usuarios, marcas, categorias, productos, producto_categoria,
               direcciones_envio, venta, detalle_venta, pagos,
-              movimientos_inventario, reseñas_productos, devoluciones;
+              movimientos_inventario, resenas_productos, devoluciones;
 
 
 -- =====================================================

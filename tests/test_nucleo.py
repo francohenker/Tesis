@@ -2,6 +2,7 @@
 import array
 import math
 import random
+import re
 import sys
 from pathlib import Path
 
@@ -218,8 +219,30 @@ def test_secciones_de_los_scripts_de_indices():
     my = secciones_sql((raiz / "mysql_indexes_oe5.sql").read_text(encoding="utf-8"))
     assert {"0", "2", "3", "4A", "4B", "6"} <= set(pg) and {"0", "2", "3", "4", "6"} <= set(my)
     assert [len(sentencias(pg[k])) for k in ("0", "2", "3", "4A", "4B")] == [13, 12, 7, 3, 3]
-    assert [len(sentencias(my[k])) for k in ("0", "2", "3", "4")] == [13, 12, 7, 3]
+    assert [len(sentencias(my[k])) for k in ("2", "3", "4")] == [12, 7, 3]
     assert all(s.upper().startswith("CREATE") for k in ("2", "3") for s in sentencias(pg[k]))
+    # MySQL, sección 0: 13 índices fk_* y luego las 17 claves foráneas que los usan
+    my0 = sentencias(my["0"])
+    creates = [i for i, s in enumerate(my0) if s.upper().startswith("CREATE INDEX")]
+    alters = [i for i, s in enumerate(my0) if s.upper().startswith("ALTER TABLE")]
+    assert len(creates) == 13 and max(creates) < min(alters)
+    assert sum(s.upper().count("FOREIGN KEY") for s in my0) == 17
+    assert all("ALGORITHM = INPLACE" in s for s in my0 if s.upper().startswith("ALTER TABLE"))
+
+
+def _codigo_sql(ruta: Path) -> str:
+    """Texto SQL sin comentarios ni literales de cadena."""
+    sin_comentarios = "\n".join(linea.split("--")[0] for linea in ruta.read_text(encoding="utf-8").splitlines())
+    return re.sub(r"'(?:[^']|'')*'", "''", sin_comentarios)
+
+
+def test_scripts_sql_sin_enie_y_mysql_sin_fk_ni_timestamp():
+    raiz = Path(__file__).resolve().parent.parent / "sql"
+    for f in sorted(raiz.glob("*.sql")):
+        assert "ñ" not in _codigo_sql(f), f"identificador con «ñ» en {f.name} (Tabla 3.1)"
+    my = _codigo_sql(raiz / "mysql_create_db.sql")
+    assert "FOREIGN KEY" not in my                       # se agregan en la sección 0 de los índices
+    assert not re.search(r"\bTIMESTAMP\b", my)           # DATETIME(6), salvo CURRENT_TIMESTAMP(6)
 
 
 # ------------------------------------------------- restauración de imágenes

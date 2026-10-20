@@ -4,16 +4,42 @@
 -- Versión limpia: sin índices adicionales
 -- (Solo se mantienen PKs y constraints UNIQUE)
 -- =====================================================
+-- La base se crea una sola vez, como superusuario, con codificación UTF-8
+-- y orden por punto de código (Tabla 3.1). Es el mismo criterio que la
+-- collation utf8mb4_0900_bin de MySQL: distingue mayúsculas y acentos y
+-- compara sin relleno de espacios.
+--
+--   CREATE DATABASE tesis TEMPLATE template0 ENCODING 'UTF8'
+--          LOCALE_PROVIDER builtin LOCALE 'C.UTF-8';
+--
+-- Identificadores sin «ñ» (Tabla 3.1): resenas_productos, id_resena,
+-- fecha_resena.
+-- =====================================================
+
+DO $$
+DECLARE
+    v_enc  text;
+    v_prov "char";
+    v_loc  text;
+BEGIN
+    SELECT pg_encoding_to_char(encoding), datlocprovider, datlocale
+      INTO v_enc, v_prov, v_loc
+      FROM pg_database WHERE datname = current_database();
+    IF v_enc <> 'UTF8' OR v_prov <> 'b' OR v_loc IS DISTINCT FROM 'C.UTF-8' THEN
+        RAISE WARNING 'La base % no usa UTF8 + builtin C.UTF-8 (encoding=%, proveedor=%, locale=%): '
+                      'no es la configuración de la tesis', current_database(), v_enc, v_prov, v_loc;
+    END IF;
+END $$;
 
 -- Eliminar tablas si existen (orden inverso de dependencias)
 DROP TABLE IF EXISTS devoluciones CASCADE;
 DROP TABLE IF EXISTS pagos CASCADE;
 DROP TABLE IF EXISTS movimientos_inventario CASCADE;
-DROP TABLE IF EXISTS reseñas_productos CASCADE;
-DROP TABLE IF EXISTS direcciones_envio CASCADE;
-DROP TABLE IF EXISTS producto_categoria CASCADE;
+DROP TABLE IF EXISTS resenas_productos CASCADE;
 DROP TABLE IF EXISTS detalle_venta CASCADE;
 DROP TABLE IF EXISTS venta CASCADE;
+DROP TABLE IF EXISTS direcciones_envio CASCADE;
+DROP TABLE IF EXISTS producto_categoria CASCADE;
 DROP TABLE IF EXISTS productos CASCADE;
 DROP TABLE IF EXISTS categorias CASCADE;
 DROP TABLE IF EXISTS marcas CASCADE;
@@ -153,8 +179,8 @@ CREATE TABLE movimientos_inventario (
     fecha_movimiento    TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE reseñas_productos (
-    id_reseña           BIGSERIAL PRIMARY KEY,
+CREATE TABLE resenas_productos (
+    id_resena           BIGSERIAL PRIMARY KEY,
     id_usuario          BIGINT NOT NULL REFERENCES usuarios(id_usuario) ON DELETE CASCADE,
     id_producto         BIGINT NOT NULL REFERENCES productos(id_producto) ON DELETE CASCADE,
     id_venta            BIGINT REFERENCES venta(id_venta) ON DELETE SET NULL,
@@ -162,10 +188,10 @@ CREATE TABLE reseñas_productos (
     titulo              VARCHAR(150),
     comentario          TEXT,
     imagen_url          VARCHAR(500),
-    fecha_reseña        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    fecha_resena        TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
     fecha_edicion       TIMESTAMP,
     votos_utiles        INTEGER DEFAULT 0,
-    CONSTRAINT uq_usuario_producto_reseña UNIQUE (id_usuario, id_producto)
+    CONSTRAINT uq_usuario_producto_resena UNIQUE (id_usuario, id_producto)
 );
 
 CREATE TABLE devoluciones (
